@@ -81,6 +81,131 @@ Main REST endpoints:
 
 WebSocket support exists for live terminal attach and interactive session IO.
 
+## Socket.IO Streaming
+
+The live terminal path is exposed over Socket.IO.
+
+In practice, the common flow is:
+
+1. create or identify a tmux session over REST
+2. connect to the Socket.IO server
+3. emit `attach` with the session name
+4. receive `output` events as terminal text arrives
+5. emit `input` to send keystrokes or commands
+6. emit `resize` when the terminal size changes
+
+Important events:
+
+- client emits:
+  - `attach`
+  - `detach`
+  - `input`
+  - `resize`
+  - `refresh_sessions`
+  - `run_preflight`
+- server emits:
+  - `attached`
+  - `detached`
+  - `output`
+  - `session_not_found`
+  - `session_list`
+  - `preflight_result`
+
+### Minimal JavaScript Example
+
+```js
+import { io } from "socket.io-client";
+
+const socket = io("http://localhost:5678", {
+  transports: ["websocket"],
+});
+
+socket.on("connect", () => {
+  socket.emit("attach", {
+    session: "example-session",
+    cols: 120,
+    rows: 40,
+  });
+});
+
+socket.on("attached", (payload) => {
+  console.log("attached", payload);
+});
+
+socket.on("output", (chunk) => {
+  process.stdout.write(chunk);
+});
+
+socket.on("session_not_found", (payload) => {
+  console.error("session not found", payload);
+});
+
+function sendLine(text) {
+  socket.emit("input", {
+    text,
+    enter: true,
+  });
+}
+
+function resize(cols, rows) {
+  socket.emit("resize", { cols, rows });
+}
+```
+
+### Minimal Python Example
+
+```python
+import socketio
+
+sio = socketio.Client()
+
+
+@sio.event
+def connect():
+    sio.emit("attach", {
+        "session": "example-session",
+        "cols": 120,
+        "rows": 40,
+    })
+
+
+@sio.on("attached")
+def on_attached(payload):
+    print("attached", payload)
+
+
+@sio.on("output")
+def on_output(chunk):
+    print(chunk, end="")
+
+
+@sio.on("session_not_found")
+def on_missing(payload):
+    print("session not found", payload)
+
+
+sio.connect("http://localhost:5678", transports=["websocket"])
+sio.emit("input", {"text": "echo hello", "enter": True})
+sio.wait()
+```
+
+### When To Use REST vs Socket.IO
+
+Use REST when you want:
+
+- to start a session
+- to trust or untrust a path
+- to inspect sessions
+- to fetch session output snapshots
+- to send one-off input without attaching
+
+Use Socket.IO when you want:
+
+- live terminal streaming
+- interactive attach
+- terminal resizing
+- a real-time session UX
+
 ## Trust Model
 
 Agent CLIs often maintain their own trusted-project configuration. Tmuxer exposes:
