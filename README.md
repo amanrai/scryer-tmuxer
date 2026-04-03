@@ -245,7 +245,3 @@ If a caller can reach tmuxer, it can:
 - send input into sessions
 
 That is powerful by design and should be treated accordingly.
-
-## Notes
-
-- For implementation details and current operational notes, see [HANDOFF.md](./HANDOFF.md).
