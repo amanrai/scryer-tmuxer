@@ -1,5 +1,7 @@
 # scryer-tmuxer
 
+Note: this project includes vibe-coded elements produced with Codex and Claude.
+
 Agent-first tmux session manager for Scryer.
 
 The point of `scryer-tmuxer` is not to be a generic remote shell service. It exists to make agent execution reliable inside a container:
