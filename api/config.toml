@@ -1,0 +1,17 @@
+[paths]
+agent_sessions_dir = "/agent-sessions"
+
+[skills_source_dirs]
+claude = "/skills"
+codex  = "/skills"
+gemini = "/skills"
+
+[default_prompts]
+claude = "use the message sender skill to start a conversation with the user. identify yourself including your model name"
+codex  = "use the message sender skill to start a conversation with the user. identify yourself including your model name"
+gemini = "use the message sender skill to start a conversation with the user. identify yourself including your model name"
+
+[default_models]
+claude = "claude-sonnet-4-6"
+codex  = "gpt-5.4"
+gemini = "gemini-2.5-pro"

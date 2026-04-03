@@ -1,0 +1,6 @@
+# Codex project-level config
+# https://developers.openai.com/codex/config-reference/
+
+[permissions]
+# network.allow = []
+# network.deny = []

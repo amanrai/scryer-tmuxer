@@ -1,0 +1,7 @@
+fastapi
+uvicorn
+python-socketio
+jinja2
+python-dotenv
+aiofiles
+tomli

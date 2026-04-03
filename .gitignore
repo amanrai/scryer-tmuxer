@@ -1,0 +1,8 @@
+.env
+certs/
+tmuxer/
+__pycache__/
+*.pyc
+*.pyo
+sandbox.log
+.claude/

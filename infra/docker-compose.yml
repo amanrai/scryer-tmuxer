@@ -1,0 +1,71 @@
+name: tmuxer
+
+networks:
+  scryer-net:
+    external: true
+
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile
+    ports:
+      - "5678:5678"
+    env_file:
+      - ../.env
+    environment:
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ~/.claude:/root/.claude
+      - ./settings.local.json:/app/.claude/settings.local.json:ro
+      # - ./codex.config.toml:/app/.codex/config.toml:ro
+      # - ./gemini.settings.json:/app/.gemini/settings.json:ro
+      - ~/.claude.json:/mnt/claude.json:ro
+      - ~/.codex:/root/.codex
+      - ~/.gemini:/root/.gemini
+      - ~/Code/common-volume/agent-sessions:/agent-sessions
+      - ~/Code/common-volume/skills:/skills:ro
+      - ~/Code/common-volume/templates:/templates:ro
+      - ~/Code/common-volume/interactor:/interactor:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    networks:
+      - scryer-net
+    restart: unless-stopped
+
+  ui:
+    build:
+      context: ..
+      dockerfile: infra/Dockerfile.ui
+    expose:
+      - "5679"
+    env_file:
+      - ../.env
+    environment:
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    depends_on:
+      - api
+    networks:
+      - scryer-net
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    ports:
+      - "80:80"
+    environment:
+      TZ: ${TZ:-Asia/Kolkata}
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./.htpasswd:/etc/nginx/.htpasswd:ro
+      - /etc/localtime:/etc/localtime:ro
+      - /etc/timezone:/etc/timezone:ro
+    depends_on:
+      - api
+      - ui
+    networks:
+      - scryer-net
+    restart: unless-stopped

@@ -1,0 +1,1046 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tmuxer</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.min.js"></script>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:        #383d48;
+      --surface:   #42474f;
+      --border:    #575e6b;
+      --accent:    #58a6ff;
+      --accent-bg: #1f3358;
+      --text:      #e8ecf0;
+      --muted:     #adb4bc;
+      --danger:    #f85149;
+      --success:   #3fb950;
+      --sidebar-w: 260px;
+    }
+
+    html, body {
+      height: 100%;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-size: 13px;
+      overflow: hidden;
+    }
+
+    /* ── Layout ─────────────────────────────────── */
+    #app {
+      display: flex;
+      height: 100vh;
+    }
+
+    /* ── Sidebar ─────────────────────────────────── */
+    #sidebar {
+      width: var(--sidebar-w);
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      background: var(--surface);
+      border-right: 1px solid var(--border);
+    }
+
+    #sidebar-header {
+      padding: 14px 16px 10px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    #sidebar-header h1 {
+      font-size: 14px;
+      font-weight: 600;
+      letter-spacing: .5px;
+      color: var(--text);
+    }
+
+    #status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--danger);
+      transition: background .3s;
+    }
+    #status-dot.connected { background: var(--success); }
+
+    #new-session-btn {
+      margin: 12px;
+      padding: 8px 12px;
+      background: var(--accent-bg);
+      color: var(--accent);
+      border: 1px solid var(--accent);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      transition: background .15s;
+    }
+    #new-session-btn:hover { background: #253d65; }
+    #new-session-btn svg { flex-shrink: 0; }
+
+    #sessions-list {
+      flex: 1;
+      overflow-y: auto;
+      padding: 4px 0;
+    }
+    #sessions-list::-webkit-scrollbar { width: 4px; }
+    #sessions-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .session-item {
+      display: flex;
+      align-items: center;
+      padding: 8px 12px;
+      cursor: pointer;
+      border-radius: 6px;
+      margin: 2px 8px;
+      gap: 8px;
+      transition: background .1s;
+    }
+    .session-item:hover { background: #1c2128; }
+    .session-item.active {
+      background: var(--accent-bg);
+      color: var(--accent);
+    }
+
+    .session-icon {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      flex-shrink: 0;
+    }
+    .session-item.active .session-icon { background: var(--accent); }
+    .session-item.attached .session-icon { background: var(--success); }
+
+    .session-info {
+      flex: 1;
+      min-width: 0;
+    }
+    .session-name {
+      font-weight: 500;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .session-meta {
+      font-size: 11px;
+      color: var(--muted);
+      margin-top: 1px;
+    }
+
+    .session-kill {
+      opacity: 0;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      padding: 2px 4px;
+      border-radius: 3px;
+      line-height: 1;
+      font-size: 14px;
+      transition: color .1s, opacity .1s;
+    }
+    .session-item:hover .session-kill { opacity: 1; }
+    .session-kill:hover { color: var(--danger); }
+
+    .no-sessions {
+      color: var(--muted);
+      text-align: center;
+      padding: 32px 16px;
+      font-size: 12px;
+    }
+
+    #sidebar-footer {
+      padding: 10px 12px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      gap: 6px;
+    }
+
+    #detach-btn {
+      flex: 1;
+      padding: 6px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: color .1s, border-color .1s;
+    }
+    #detach-btn:hover:not(:disabled) { color: var(--text); border-color: var(--muted); }
+    #detach-btn:disabled { opacity: .4; cursor: default; }
+
+    #refresh-btn {
+      padding: 6px 10px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      transition: color .1s, border-color .1s;
+    }
+    #refresh-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    /* ── Terminal pane ───────────────────────────── */
+    #terminal-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+      background: #383d48;
+    }
+
+    #terminal-toolbar {
+      padding: 8px 16px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: var(--surface);
+      min-height: 38px;
+    }
+
+    #terminal-session-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    #terminal-placeholder {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 12px;
+      color: var(--muted);
+    }
+    #terminal-placeholder svg { opacity: .3; }
+    #terminal-placeholder p { font-size: 13px; }
+
+    #terminal-container {
+      flex: 1;
+      min-height: 0;
+      display: none;
+      overflow: hidden;
+    }
+    #terminal-container.visible { display: flex; flex-direction: column; }
+
+    /* Make xterm fill the container */
+    #terminal-container .xterm,
+    #terminal-container .xterm-viewport,
+    #terminal-container .xterm-screen { width: 100% !important; height: 100% !important; }
+    #terminal-container .xterm { flex: 1; min-height: 0; }
+
+    /* ── Agent section ───────────────────────────── */
+    #agent-section {
+      padding: 4px 12px 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    #agent-section-label {
+      font-size: 10px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .6px;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    #agent-buttons {
+      display: flex;
+      gap: 6px;
+    }
+    .agent-btn {
+      flex: 1;
+      padding: 6px 4px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      font-weight: 500;
+      transition: color .1s, border-color .1s, background .1s;
+    }
+    .agent-btn:hover { color: var(--text); border-color: var(--muted); background: #1c2128; }
+    .agent-btn[data-agent="claude"]:hover { color: #e8975a; border-color: #e8975a; }
+    .agent-btn[data-agent="codex"]:hover  { color: var(--accent); border-color: var(--accent); }
+    .agent-btn[data-agent="gemini"]:hover { color: #4db8a0; border-color: #4db8a0; }
+
+    #agent-modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    #agent-modal-backdrop.open { display: flex; }
+
+    /* ── Modals (shared) ─────────────────────────── */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+    }
+    .modal-backdrop.open { display: flex; }
+
+    .modal {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      width: 520px;
+      max-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .modal-body {
+      padding: 22px 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow-y: auto;
+    }
+    .modal-body::-webkit-scrollbar { width: 4px; }
+    .modal-body::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+    .modal h2 { font-size: 15px; font-weight: 600; }
+
+    .modal label { font-size: 11px; color: var(--muted); display: block; margin-bottom: 4px; font-weight: 500; }
+
+    .modal input, .modal select, .modal textarea {
+      width: 100%;
+      padding: 7px 10px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text);
+      font-size: 12px;
+      font-family: inherit;
+      outline: none;
+      transition: border-color .15s;
+    }
+    .modal input:focus, .modal select:focus, .modal textarea:focus { border-color: var(--accent); }
+    .modal select { cursor: pointer; }
+    .modal textarea { resize: vertical; }
+
+    .modal-footer {
+      padding: 12px 24px;
+      border-top: 1px solid var(--border);
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .btn-cancel {
+      padding: 7px 14px;
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+    .btn-cancel:hover { color: var(--text); }
+
+    .btn-create {
+      padding: 7px 16px;
+      background: var(--accent);
+      border: none;
+      color: #0d1117;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .btn-create:hover { background: #79b8ff; }
+
+    /* ── Permissions section ─────────────────────── */
+    .perm-details {
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+    .perm-details summary {
+      padding: 8px 12px;
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--muted);
+      cursor: pointer;
+      user-select: none;
+      list-style: none;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      text-transform: uppercase;
+      letter-spacing: .5px;
+    }
+    .perm-details summary::-webkit-details-marker { display: none; }
+    .perm-details[open] summary { border-bottom: 1px solid var(--border); color: var(--text); }
+    .perm-details summary::after { content: '›'; font-size: 14px; transition: transform .15s; }
+    .perm-details[open] summary::after { transform: rotate(90deg); }
+
+    .perm-body {
+      padding: 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      max-height: 45vh;
+      overflow-y: auto;
+    }
+
+    .perm-row-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 4px;
+    }
+    .perm-row-header span {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: .4px;
+    }
+
+    .rule-list { display: flex; flex-direction: column; gap: 5px; }
+
+    .rule-row {
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .rule-row input, .rule-row select {
+      flex: 1;
+      padding: 5px 8px;
+      font-size: 11px;
+    }
+    .rule-row select { flex: 0 0 90px; }
+    .rule-row .rule-allow-select { flex: 0 0 70px; }
+
+    .btn-add-rule {
+      padding: 4px 10px;
+      background: none;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+      border-radius: 5px;
+      cursor: pointer;
+      font-size: 11px;
+      width: 100%;
+      transition: color .1s, border-color .1s;
+    }
+    .btn-add-rule:hover { color: var(--accent); border-color: var(--accent); }
+
+    .btn-remove-rule {
+      flex-shrink: 0;
+      padding: 4px 7px;
+      background: none;
+      border: none;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 14px;
+      border-radius: 4px;
+      line-height: 1;
+    }
+    .btn-remove-rule:hover { color: var(--danger); }
+
+    .network-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .network-row input[type="checkbox"] {
+      width: auto;
+      flex: none;
+      cursor: pointer;
+    }
+    .network-row label {
+      margin: 0;
+      font-size: 12px;
+      color: var(--text);
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Sidebar -->
+  <aside id="sidebar">
+    <div id="sidebar-header">
+      <h1>tmuxer</h1>
+      <div id="status-dot" title="Disconnected"></div>
+    </div>
+
+    <button id="new-session-btn">
+      <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+        <path d="M6 1v10M1 6h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+      New Session
+    </button>
+
+    <div id="agent-section">
+      <div id="agent-section-label">Start Agent</div>
+      <div id="agent-buttons">
+        <button class="agent-btn" data-agent="claude">Claude</button>
+        <button class="agent-btn" data-agent="codex">Codex</button>
+        <button class="agent-btn" data-agent="gemini">Gemini</button>
+      </div>
+    </div>
+
+    <div id="sessions-list">
+      <div class="no-sessions">No sessions</div>
+    </div>
+
+    <div id="sidebar-footer">
+      <button id="detach-btn" disabled>Detach</button>
+      <button id="refresh-btn">Refresh</button>
+    </div>
+  </aside>
+
+  <!-- Terminal pane -->
+  <main id="terminal-pane">
+    <div id="terminal-toolbar">
+      <span id="terminal-session-name"></span>
+    </div>
+    <div id="terminal-placeholder">
+      <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
+        <rect x="2" y="4" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/>
+        <path d="M7 9l3 3-3 3M12 15h5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      <p>Select a session or create a new one</p>
+    </div>
+    <div id="terminal-container"></div>
+  </main>
+</div>
+
+<!-- Start agent modal -->
+<div id="agent-modal-backdrop" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-body">
+      <h2>Start <span id="agent-modal-title"></span></h2>
+      <div>
+        <label for="agent-prompt-input">Starting prompt <span style="color:var(--border);font-weight:400">(optional)</span></label>
+        <textarea id="agent-prompt-input" placeholder="Describe what you want the agent to do…" rows="3"></textarea>
+      </div>
+      <div>
+        <label for="agent-model-input">Model <span style="color:var(--border);font-weight:400">(optional)</span></label>
+        <input id="agent-model-input" type="text" placeholder="" autocomplete="off" />
+      </div>
+
+      <!-- Permissions -->
+      <details class="perm-details" id="perm-details">
+        <summary>Permissions</summary>
+        <div class="perm-body">
+
+          <!-- Approval mode -->
+          <div>
+            <label>Approval mode</label>
+            <select id="perm-approval-mode">
+              <option value="ask_all">Ask for everything</option>
+              <option value="auto_edit">Auto-approve file edits</option>
+              <option value="auto_all">Auto-approve everything</option>
+            </select>
+          </div>
+
+          <!-- Filesystem rules -->
+          <div>
+            <div class="perm-row-header">
+              <span>Filesystem</span>
+            </div>
+            <div class="rule-list" id="fs-rules"></div>
+            <button class="btn-add-rule" id="add-fs-rule">+ Add path rule</button>
+          </div>
+
+          <!-- Shell rules -->
+          <div>
+            <div class="perm-row-header">
+              <span>Shell commands</span>
+            </div>
+            <div class="rule-list" id="shell-rules"></div>
+            <button class="btn-add-rule" id="add-shell-rule">+ Add shell rule</button>
+          </div>
+
+          <!-- Network -->
+          <div>
+            <div class="perm-row-header"><span>Network</span></div>
+            <div class="network-row">
+              <input type="checkbox" id="perm-net-enabled" />
+              <label for="perm-net-enabled">Enable network access</label>
+            </div>
+            <div id="perm-net-tools" style="margin-top:6px;display:flex;gap:16px;opacity:0.4;pointer-events:none;">
+              <div class="network-row">
+                <input type="checkbox" id="perm-net-webfetch" disabled />
+                <label for="perm-net-webfetch" style="font-size:12px">WebFetch</label>
+              </div>
+              <div class="network-row">
+                <input type="checkbox" id="perm-net-websearch" disabled />
+                <label for="perm-net-websearch" style="font-size:12px">WebSearch</label>
+              </div>
+            </div>
+            <div id="perm-net-domains" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
+              <div>
+                <label>Allowed domains <span style="color:var(--border);font-weight:400">(comma-separated, empty = all)</span></label>
+                <input id="perm-net-allowed" type="text" placeholder="github.com, npmjs.org" />
+              </div>
+              <div>
+                <label>Denied domains</label>
+                <input id="perm-net-denied" type="text" placeholder="" />
+              </div>
+            </div>
+          </div>
+
+        </div>
+      </details>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="agent-modal-cancel">Cancel</button>
+      <button class="btn-create" id="agent-modal-start">Start</button>
+    </div>
+  </div>
+</div>
+
+<!-- New session modal -->
+<div id="modal-backdrop" class="modal-backdrop">
+  <div class="modal">
+    <div class="modal-body">
+      <h2>New Session</h2>
+      <div>
+        <label for="session-name-input">Session name (optional)</label>
+        <input id="session-name-input" type="text" placeholder="my-session" autocomplete="off" />
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn-cancel" id="modal-cancel">Cancel</button>
+      <button class="btn-create" id="modal-create">Create</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const SERVER  = '';
+  const API_KEY = '8tq2KxJnLuPsWvv-8rDmMV7smvgylosYaIhFUiNloa4';
+  const AUTH_HEADERS = { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
+
+  let socket = null;
+  let term = null;
+  let fitAddon = null;
+  let activeSession = null;
+  let sessions = [];
+
+  const $statusDot       = document.getElementById('status-dot');
+  const $sessionsList    = document.getElementById('sessions-list');
+  const $termContainer   = document.getElementById('terminal-container');
+  const $termPlaceholder = document.getElementById('terminal-placeholder');
+  const $termName        = document.getElementById('terminal-session-name');
+  const $detachBtn       = document.getElementById('detach-btn');
+  const $refreshBtn      = document.getElementById('refresh-btn');
+  const $newBtn          = document.getElementById('new-session-btn');
+  const $modalBackdrop      = document.getElementById('modal-backdrop');
+  const $modalCancel        = document.getElementById('modal-cancel');
+  const $modalCreate        = document.getElementById('modal-create');
+  const $nameInput          = document.getElementById('session-name-input');
+  const $agentModalBackdrop = document.getElementById('agent-modal-backdrop');
+  const $agentModalTitle    = document.getElementById('agent-modal-title');
+  const $agentModalCancel   = document.getElementById('agent-modal-cancel');
+  const $agentModalStart    = document.getElementById('agent-modal-start');
+  const $agentPromptInput   = document.getElementById('agent-prompt-input');
+  const $agentModelInput    = document.getElementById('agent-model-input');
+  const $permApproval       = document.getElementById('perm-approval-mode');
+  const $fsRules            = document.getElementById('fs-rules');
+  const $shellRules         = document.getElementById('shell-rules');
+  const $addFsRule          = document.getElementById('add-fs-rule');
+  const $addShellRule       = document.getElementById('add-shell-rule');
+  const $netEnabled         = document.getElementById('perm-net-enabled');
+  const $netAllowed         = document.getElementById('perm-net-allowed');
+  const $netDenied          = document.getElementById('perm-net-denied');
+  const $netTools           = document.getElementById('perm-net-tools');
+  const $netWebfetch        = document.getElementById('perm-net-webfetch');
+  const $netWebsearch       = document.getElementById('perm-net-websearch');
+
+  function syncNetworkTools() {
+    const on = $netEnabled.checked;
+    $netTools.style.opacity       = on ? '1' : '0.4';
+    $netTools.style.pointerEvents = on ? 'auto' : 'none';
+    $netWebfetch.disabled         = !on;
+    $netWebsearch.disabled        = !on;
+    if (on) { $netWebfetch.checked = true; $netWebsearch.checked = true; }
+    else     { $netWebfetch.checked = false; $netWebsearch.checked = false; }
+  }
+  $netEnabled.addEventListener('change', syncNetworkTools);
+  let   _pendingAgent       = null;
+  let   _agentDefaults      = {};
+  let   _perms              = null;  // current AgentPermissions IR being edited
+
+  // ── Terminal ─────────────────────────────────────
+  // IMPORTANT: show the container BEFORE calling term.open() so xterm can
+  // measure real pixel dimensions. The sequence is always:
+  //   1. showTerminal()   ← makes container visible
+  //   2. openTerm()       ← term.open() + fitAddon.fit()
+  //   3. socket.emit()    ← send cols/rows that came from fitAddon
+
+  function showTerminal(sessionName) {
+    $termPlaceholder.style.display = 'none';
+    $termContainer.classList.add('visible');
+    $termName.textContent = sessionName;
+    $detachBtn.disabled = false;
+  }
+
+  function hideTerminal() {
+    $termPlaceholder.style.display = '';
+    $termContainer.classList.remove('visible');
+    $termName.textContent = '';
+    $detachBtn.disabled = true;
+    activeSession = null;
+    renderSessions();
+  }
+
+  function openTerm() {
+    if (term) term.dispose();
+    term = new Terminal({
+      theme: {
+        background:  '#383d48', foreground:  '#e8ecf0',
+        cursor:      '#58a6ff', cursorAccent:'#383d48',
+        selectionBackground: 'rgba(88,166,255,0.25)',
+        black:   '#282c35', brightBlack:   '#6e7681',
+        red:     '#ff7b72', brightRed:     '#ffa198',
+        green:   '#3fb950', brightGreen:   '#56d364',
+        yellow:  '#d29922', brightYellow:  '#e3b341',
+        blue:    '#58a6ff', brightBlue:    '#79c0ff',
+        magenta: '#bc8cff', brightMagenta: '#d2a8ff',
+        cyan:    '#39c5cf', brightCyan:    '#56d4dd',
+        white:   '#b1bac4', brightWhite:   '#f0f6fc',
+      },
+      fontFamily: '"Cascadia Code", "Fira Code", "JetBrains Mono", "Menlo", monospace',
+      fontSize: 13,
+      lineHeight: 1.4,
+      cursorBlink: true,
+      allowProposedApi: true,
+    });
+    fitAddon = new FitAddon.FitAddon();
+    term.loadAddon(fitAddon);
+    $termContainer.innerHTML = '';
+    term.open($termContainer);  // container is visible here — dimensions are real
+    fitAddon.fit();
+    term.onData(data => socket.emit('input', data));
+  }
+
+  // ── Sessions ──────────────────────────────────────
+  function renderSessions() {
+    if (!sessions.length) {
+      $sessionsList.innerHTML = '<div class="no-sessions">No active sessions</div>';
+      return;
+    }
+    $sessionsList.innerHTML = sessions.map(s => {
+      const isActive = s.name === activeSession;
+      return `
+        <div class="session-item ${isActive ? 'active' : ''} ${s.attached ? 'attached' : ''}" data-name="${s.name}">
+          <div class="session-icon"></div>
+          <div class="session-info">
+            <div class="session-name">${s.name}</div>
+            <div class="session-meta">${s.windows} window${s.windows !== 1 ? 's' : ''} · ${s.created}</div>
+          </div>
+          <button class="session-kill" data-name="${s.name}" title="Kill session">×</button>
+        </div>`;
+    }).join('');
+
+    $sessionsList.querySelectorAll('.session-item').forEach(el => {
+      el.addEventListener('click', e => {
+        if (e.target.classList.contains('session-kill')) return;
+        doAttach(el.dataset.name);
+      });
+    });
+    $sessionsList.querySelectorAll('.session-kill').forEach(el => {
+      el.addEventListener('click', e => {
+        e.stopPropagation();
+        socket.emit('kill_session', { session: el.dataset.name });
+      });
+    });
+  }
+
+  function doAttach(name) {
+    if (name === activeSession) return;
+    showTerminal(name);   // 1. visible first
+    openTerm();           // 2. open into visible container
+    socket.emit('attach', { session: name, cols: term.cols, rows: term.rows });
+  }
+
+  function doNewSession(name) {
+    showTerminal(name || 'new session');  // 1. visible first
+    openTerm();                           // 2. open into visible container
+    socket.emit('new_session', { name: name || undefined, cols: term.cols, rows: term.rows });
+  }
+
+  // ── Socket ────────────────────────────────────────
+  function connect() {
+    socket = io(SERVER, { transports: ['websocket'] });
+
+    socket.on('connect', () => {
+      $statusDot.classList.add('connected');
+      $statusDot.title = 'Connected';
+    });
+
+    socket.on('disconnect', () => {
+      $statusDot.classList.remove('connected');
+      $statusDot.title = 'Disconnected';
+      hideTerminal();
+    });
+
+    socket.on('session_list', list => {
+      sessions = list;
+      renderSessions();
+    });
+
+    socket.on('attached', ({ session }) => {
+      activeSession = session;
+      $termName.textContent = session;
+      renderSessions();
+      // Re-fit now that we know the session is live, then sync size to server
+      if (fitAddon && term) {
+        fitAddon.fit();
+        socket.emit('resize', { cols: term.cols, rows: term.rows });
+      }
+    });
+
+    socket.on('output', data => {
+      if (term) term.write(data);
+    });
+
+    socket.on('session_ended', () => {
+      if (term) term.write('\r\n\x1b[33m[session ended]\x1b[0m\r\n');
+      hideTerminal();
+      socket.emit('list_sessions');
+    });
+
+    socket.on('session_not_found', ({ session }) => {
+      alert(`Session "${session}" not found.`);
+      hideTerminal();
+      socket.emit('list_sessions');
+    });
+
+    socket.on('detached', () => hideTerminal());
+  }
+
+  // ── Resize ────────────────────────────────────────
+  new ResizeObserver(() => {
+    if (!term || !fitAddon || !activeSession) return;
+    fitAddon.fit();
+    socket.emit('resize', { cols: term.cols, rows: term.rows });
+  }).observe($termContainer);
+
+  // ── Buttons ───────────────────────────────────────
+  $detachBtn.addEventListener('click', () => socket.emit('detach'));
+  $refreshBtn.addEventListener('click', () => socket.emit('list_sessions'));
+
+  $newBtn.addEventListener('click', () => {
+    $nameInput.value = '';
+    $modalBackdrop.classList.add('open');
+    setTimeout(() => $nameInput.focus(), 50);
+  });
+
+  $modalCancel.addEventListener('click', () => $modalBackdrop.classList.remove('open'));
+  $modalBackdrop.addEventListener('click', e => {
+    if (e.target === $modalBackdrop) $modalBackdrop.classList.remove('open');
+  });
+  document.getElementById('modal-backdrop').addEventListener('keydown', e => {
+    if (e.key === 'Escape') $modalBackdrop.classList.remove('open');
+  });
+
+  function createSession() {
+    const name = $nameInput.value.trim();
+    $modalBackdrop.classList.remove('open');
+    doNewSession(name);
+  }
+
+  $modalCreate.addEventListener('click', createSession);
+  $nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') createSession();
+    if (e.key === 'Escape') $modalBackdrop.classList.remove('open');
+  });
+
+  // ── Agent defaults ────────────────────────────────
+  async function fetchAgentDefaults() {
+    try {
+      const res = await fetch(`${SERVER}/agents`, { headers: AUTH_HEADERS });
+      if (res.ok) _agentDefaults = await res.json();
+    } catch {}
+  }
+
+  // ── Permissions rendering ─────────────────────────
+  function renderFSRules() {
+    $fsRules.innerHTML = '';
+    (_perms.filesystem || []).forEach((rule, i) => {
+      const row = document.createElement('div');
+      row.className = 'rule-row';
+      row.innerHTML = `
+        <input type="text" value="${rule.path}" placeholder="path or glob" data-idx="${i}" data-field="path" />
+        <select data-idx="${i}" data-field="access">
+          <option value="read"  ${rule.access === 'read'  ? 'selected' : ''}>read</option>
+          <option value="write" ${rule.access === 'write' ? 'selected' : ''}>write</option>
+          <option value="none"  ${rule.access === 'none'  ? 'selected' : ''}>none</option>
+        </select>
+        <button class="btn-remove-rule" data-idx="${i}" data-type="fs">×</button>`;
+      $fsRules.appendChild(row);
+    });
+    $fsRules.querySelectorAll('input[data-field="path"]').forEach(el => {
+      el.addEventListener('input', e => {
+        _perms.filesystem[+e.target.dataset.idx].path = e.target.value;
+      });
+    });
+    $fsRules.querySelectorAll('select[data-field="access"]').forEach(el => {
+      el.addEventListener('change', e => {
+        _perms.filesystem[+e.target.dataset.idx].access = e.target.value;
+      });
+    });
+    $fsRules.querySelectorAll('.btn-remove-rule').forEach(el => {
+      el.addEventListener('click', e => {
+        _perms.filesystem.splice(+e.target.dataset.idx, 1);
+        renderFSRules();
+      });
+    });
+  }
+
+  function renderShellRules() {
+    $shellRules.innerHTML = '';
+    (_perms.shell || []).forEach((rule, i) => {
+      const row = document.createElement('div');
+      row.className = 'rule-row';
+      row.innerHTML = `
+        <input type="text" value="${rule.pattern}" placeholder="git *, npm run *" data-idx="${i}" data-field="pattern" />
+        <select class="rule-allow-select" data-idx="${i}" data-field="allow">
+          <option value="true"  ${rule.allow ? 'selected' : ''}>allow</option>
+          <option value="false" ${!rule.allow ? 'selected' : ''}>deny</option>
+        </select>
+        <button class="btn-remove-rule" data-idx="${i}" data-type="shell">×</button>`;
+      $shellRules.appendChild(row);
+    });
+    $shellRules.querySelectorAll('input[data-field="pattern"]').forEach(el => {
+      el.addEventListener('input', e => {
+        _perms.shell[+e.target.dataset.idx].pattern = e.target.value;
+      });
+    });
+    $shellRules.querySelectorAll('select[data-field="allow"]').forEach(el => {
+      el.addEventListener('change', e => {
+        _perms.shell[+e.target.dataset.idx].allow = e.target.value === 'true';
+      });
+    });
+    $shellRules.querySelectorAll('.btn-remove-rule').forEach(el => {
+      el.addEventListener('click', e => {
+        _perms.shell.splice(+e.target.dataset.idx, 1);
+        renderShellRules();
+      });
+    });
+  }
+
+  function loadPermsIntoUI(p) {
+    _perms = JSON.parse(JSON.stringify(p));  // deep clone
+    $permApproval.value    = _perms.approval_mode || 'ask_all';
+    $netEnabled.checked    = _perms.network?.enabled ?? false;
+    $netAllowed.value      = (_perms.network?.allowed_domains || []).join(', ');
+    $netDenied.value       = (_perms.network?.denied_domains  || []).join(', ');
+    syncNetworkTools();
+    renderFSRules();
+    renderShellRules();
+  }
+
+  function collectPerms() {
+    _perms.approval_mode = $permApproval.value;
+    _perms.network = {
+      enabled:         $netEnabled.checked,
+      allowed_domains: $netAllowed.value.split(',').map(s => s.trim()).filter(Boolean),
+      denied_domains:  $netDenied.value.split(',').map(s => s.trim()).filter(Boolean),
+    };
+    return _perms;
+  }
+
+  // ── Agent buttons ─────────────────────────────────
+  document.querySelectorAll('.agent-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      _pendingAgent = btn.dataset.agent;
+      const defaults = _agentDefaults[_pendingAgent] || {};
+      $agentModalTitle.textContent = _pendingAgent.charAt(0).toUpperCase() + _pendingAgent.slice(1);
+      $agentPromptInput.value = defaults.default_prompt || '';
+      $agentModelInput.value  = defaults.default_model  || '';
+      loadPermsIntoUI(defaults.default_permissions || { approval_mode: 'ask_all', filesystem: [], shell: [], network: { enabled: true, allowed_domains: [], denied_domains: [] } });
+      $agentModalBackdrop.classList.add('open');
+      setTimeout(() => $agentPromptInput.focus(), 50);
+    });
+  });
+
+  $addFsRule.addEventListener('click', () => {
+    _perms.filesystem.push({ path: '**', access: 'write' });
+    renderFSRules();
+  });
+  $addShellRule.addEventListener('click', () => {
+    _perms.shell.push({ pattern: '', allow: true });
+    renderShellRules();
+  });
+  $permApproval.addEventListener('change', () => { _perms.approval_mode = $permApproval.value; });
+
+  $agentModalCancel.addEventListener('click', () => $agentModalBackdrop.classList.remove('open'));
+  $agentModalBackdrop.addEventListener('click', e => {
+    if (e.target === $agentModalBackdrop) $agentModalBackdrop.classList.remove('open');
+  });
+
+  async function startAgent() {
+    $agentModalBackdrop.classList.remove('open');
+    $agentModalStart.disabled = true;
+
+    try {
+      const res = await fetch(`${SERVER}/start/${_pendingAgent}`, {
+        method: 'POST',
+        headers: AUTH_HEADERS,
+        body: JSON.stringify({
+          permissions:     collectPerms(),
+          starting_prompt: $agentPromptInput.value.trim(),
+          model:           $agentModelInput.value.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        alert(`Failed to start ${_pendingAgent}: ${err.detail}`);
+        return;
+      }
+      const { session } = await res.json();
+      setTimeout(() => {
+        socket.emit('list_sessions');
+        doAttach(session);
+      }, 500);
+    } catch (e) {
+      alert(`Error: ${e.message}`);
+    } finally {
+      $agentModalStart.disabled = false;
+    }
+  }
+
+  $agentModalStart.addEventListener('click', startAgent);
+  $agentPromptInput.addEventListener('keydown', e => {
+    if (e.key === 'Escape') $agentModalBackdrop.classList.remove('open');
+  });
+
+  fetchAgentDefaults();
+  connect();
+</script>
+</body>
+</html>
