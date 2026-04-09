@@ -1,5 +1,7 @@
 # scryer-tmuxer
 
+**APR 9, 2026: THIS REPO IS NOT YET SECURED AND WILL EXPOSE PORTS 5678 AND 5679 ON YOUR LOCAL MACHINE**
+
 Note: this project includes vibe-coded elements produced with Codex and Claude.
 
 Agent-first tmux session manager for Scryer.
