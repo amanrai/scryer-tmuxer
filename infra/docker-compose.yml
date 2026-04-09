@@ -39,8 +39,8 @@ services:
     build:
       context: ..
       dockerfile: infra/Dockerfile.ui
-    expose:
-      - "5679"
+    ports:
+      - "5679:5679"
     env_file:
       - ../.env
     environment:
