@@ -640,7 +640,7 @@
         <label for="session-command-input">Command</label>
         <input id="session-command-input" type="text" placeholder="claude" autocomplete="off" />
       </div>
-      <p class="helper-copy">Path is fixed to <code>agent-sessions/tmuxer-ui-test-path</code> inside common-volume.</p>
+      <p class="helper-copy">Path is fixed to <code>agent-sessions</code> inside common-volume.</p>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="modal-cancel">Cancel</button>
@@ -650,7 +650,7 @@
 </div>
 
 <script>
-  const FIXED_PATH = 'agent-sessions/tmuxer-ui-test-path';
+  const FIXED_PATH = 'agent-sessions';
   const SERVER = window.location.port === '5679'
     ? `${window.location.protocol}//${window.location.hostname}:5678`
     : '';
