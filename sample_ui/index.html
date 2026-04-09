@@ -247,56 +247,12 @@
     #terminal-container .xterm-screen { width: 100% !important; height: 100% !important; }
     #terminal-container .xterm { flex: 1; min-height: 0; }
 
-    /* ── Agent section ───────────────────────────── */
-    #agent-section {
-      padding: 4px 12px 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    #agent-section-label {
-      font-size: 10px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: .6px;
-      color: var(--muted);
-      margin-bottom: 6px;
-    }
-    #agent-buttons {
-      display: flex;
-      gap: 6px;
-    }
-    .agent-btn {
-      flex: 1;
-      padding: 6px 4px;
-      background: none;
-      border: 1px solid var(--border);
-      color: var(--muted);
-      border-radius: 5px;
-      cursor: pointer;
-      font-size: 11px;
-      font-weight: 500;
-      transition: color .1s, border-color .1s, background .1s;
-    }
-    .agent-btn:hover { color: var(--text); border-color: var(--muted); background: #1c2128; }
-    .agent-btn[data-agent="claude"]:hover { color: #e8975a; border-color: #e8975a; }
-    .agent-btn[data-agent="codex"]:hover  { color: var(--accent); border-color: var(--accent); }
-    .agent-btn[data-agent="gemini"]:hover { color: #4db8a0; border-color: #4db8a0; }
     .helper-copy {
       margin-top: 6px;
       color: var(--muted);
       font-size: 12px;
       line-height: 1.45;
     }
-
-    #agent-modal-backdrop {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0,0,0,.6);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-    }
-    #agent-modal-backdrop.open { display: flex; }
 
     /* ── Modals (shared) ─────────────────────────── */
     .modal-backdrop {
@@ -506,15 +462,6 @@
       New Session
     </button>
 
-    <div id="agent-section">
-      <div id="agent-section-label">Start Agent</div>
-      <div id="agent-buttons">
-        <button class="agent-btn" data-agent="claude">Claude</button>
-        <button class="agent-btn" data-agent="codex">Codex</button>
-        <button class="agent-btn" data-agent="gemini">Gemini</button>
-      </div>
-    </div>
-
     <div id="sessions-list">
       <div class="no-sessions">No sessions</div>
     </div>
@@ -539,92 +486,6 @@
     </div>
     <div id="terminal-container"></div>
   </main>
-</div>
-
-<!-- Start agent modal -->
-<div id="agent-modal-backdrop" class="modal-backdrop">
-  <div class="modal">
-    <div class="modal-body">
-      <h2>Start <span id="agent-modal-title"></span></h2>
-      <div>
-        <label for="agent-prompt-input">Starting prompt <span style="color:var(--border);font-weight:400">(optional)</span></label>
-        <textarea id="agent-prompt-input" placeholder="Describe what you want the agent to do…" rows="3"></textarea>
-      </div>
-      <div>
-        <label for="agent-model-input">Model <span style="color:var(--border);font-weight:400">(optional)</span></label>
-        <input id="agent-model-input" type="text" placeholder="" autocomplete="off" />
-      </div>
-
-      <!-- Permissions -->
-      <details class="perm-details" id="perm-details">
-        <summary>Permissions</summary>
-        <div class="perm-body">
-
-          <!-- Approval mode -->
-          <div>
-            <label>Approval mode</label>
-            <select id="perm-approval-mode">
-              <option value="ask_all">Ask for everything</option>
-              <option value="auto_edit">Auto-approve file edits</option>
-              <option value="auto_all">Auto-approve everything</option>
-            </select>
-          </div>
-
-          <!-- Filesystem rules -->
-          <div>
-            <div class="perm-row-header">
-              <span>Filesystem</span>
-            </div>
-            <div class="rule-list" id="fs-rules"></div>
-            <button class="btn-add-rule" id="add-fs-rule">+ Add path rule</button>
-          </div>
-
-          <!-- Shell rules -->
-          <div>
-            <div class="perm-row-header">
-              <span>Shell commands</span>
-            </div>
-            <div class="rule-list" id="shell-rules"></div>
-            <button class="btn-add-rule" id="add-shell-rule">+ Add shell rule</button>
-          </div>
-
-          <!-- Network -->
-          <div>
-            <div class="perm-row-header"><span>Network</span></div>
-            <div class="network-row">
-              <input type="checkbox" id="perm-net-enabled" />
-              <label for="perm-net-enabled">Enable network access</label>
-            </div>
-            <div id="perm-net-tools" style="margin-top:6px;display:flex;gap:16px;opacity:0.4;pointer-events:none;">
-              <div class="network-row">
-                <input type="checkbox" id="perm-net-webfetch" disabled />
-                <label for="perm-net-webfetch" style="font-size:12px">WebFetch</label>
-              </div>
-              <div class="network-row">
-                <input type="checkbox" id="perm-net-websearch" disabled />
-                <label for="perm-net-websearch" style="font-size:12px">WebSearch</label>
-              </div>
-            </div>
-            <div id="perm-net-domains" style="margin-top:8px;display:flex;flex-direction:column;gap:6px;">
-              <div>
-                <label>Allowed domains <span style="color:var(--border);font-weight:400">(comma-separated, empty = all)</span></label>
-                <input id="perm-net-allowed" type="text" placeholder="github.com, npmjs.org" />
-              </div>
-              <div>
-                <label>Denied domains</label>
-                <input id="perm-net-denied" type="text" placeholder="" />
-              </div>
-            </div>
-          </div>
-
-        </div>
-      </details>
-    </div>
-    <div class="modal-footer">
-      <button class="btn-cancel" id="agent-modal-cancel">Cancel</button>
-      <button class="btn-create" id="agent-modal-start">Start</button>
-    </div>
-  </div>
 </div>
 
 <!-- New session modal -->
@@ -676,37 +537,6 @@
   const $modalCreate        = document.getElementById('modal-create');
   const $nameInput          = document.getElementById('session-name-input');
   const $commandInput       = document.getElementById('session-command-input');
-  const $agentModalBackdrop = document.getElementById('agent-modal-backdrop');
-  const $agentModalTitle    = document.getElementById('agent-modal-title');
-  const $agentModalCancel   = document.getElementById('agent-modal-cancel');
-  const $agentModalStart    = document.getElementById('agent-modal-start');
-  const $agentPromptInput   = document.getElementById('agent-prompt-input');
-  const $agentModelInput    = document.getElementById('agent-model-input');
-  const $permApproval       = document.getElementById('perm-approval-mode');
-  const $fsRules            = document.getElementById('fs-rules');
-  const $shellRules         = document.getElementById('shell-rules');
-  const $addFsRule          = document.getElementById('add-fs-rule');
-  const $addShellRule       = document.getElementById('add-shell-rule');
-  const $netEnabled         = document.getElementById('perm-net-enabled');
-  const $netAllowed         = document.getElementById('perm-net-allowed');
-  const $netDenied          = document.getElementById('perm-net-denied');
-  const $netTools           = document.getElementById('perm-net-tools');
-  const $netWebfetch        = document.getElementById('perm-net-webfetch');
-  const $netWebsearch       = document.getElementById('perm-net-websearch');
-
-  function syncNetworkTools() {
-    const on = $netEnabled.checked;
-    $netTools.style.opacity       = on ? '1' : '0.4';
-    $netTools.style.pointerEvents = on ? 'auto' : 'none';
-    $netWebfetch.disabled         = !on;
-    $netWebsearch.disabled        = !on;
-    if (on) { $netWebfetch.checked = true; $netWebsearch.checked = true; }
-    else     { $netWebfetch.checked = false; $netWebsearch.checked = false; }
-  }
-  $netEnabled.addEventListener('change', syncNetworkTools);
-  let   _pendingAgent       = null;
-  let   _agentDefaults      = {};
-  let   _perms              = null;  // current AgentPermissions IR being edited
 
   // ── Terminal ─────────────────────────────────────
   // IMPORTANT: show the container BEFORE calling term.open() so xterm can
@@ -931,129 +761,6 @@
   $commandInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') createSession();
     if (e.key === 'Escape') $modalBackdrop.classList.remove('open');
-  });
-
-  // ── Agent defaults ────────────────────────────────
-  async function fetchAgentDefaults() {
-    try {
-      const res = await fetch(`${SERVER}/agents`, { headers: AUTH_HEADERS });
-      if (res.ok) _agentDefaults = await res.json();
-    } catch {}
-  }
-
-  // ── Permissions rendering ─────────────────────────
-  function renderFSRules() {
-    $fsRules.innerHTML = '';
-    (_perms.filesystem || []).forEach((rule, i) => {
-      const row = document.createElement('div');
-      row.className = 'rule-row';
-      row.innerHTML = `
-        <input type="text" value="${rule.path}" placeholder="path or glob" data-idx="${i}" data-field="path" />
-        <select data-idx="${i}" data-field="access">
-          <option value="read"  ${rule.access === 'read'  ? 'selected' : ''}>read</option>
-          <option value="write" ${rule.access === 'write' ? 'selected' : ''}>write</option>
-          <option value="none"  ${rule.access === 'none'  ? 'selected' : ''}>none</option>
-        </select>
-        <button class="btn-remove-rule" data-idx="${i}" data-type="fs">×</button>`;
-      $fsRules.appendChild(row);
-    });
-    $fsRules.querySelectorAll('input[data-field="path"]').forEach(el => {
-      el.addEventListener('input', e => {
-        _perms.filesystem[+e.target.dataset.idx].path = e.target.value;
-      });
-    });
-    $fsRules.querySelectorAll('select[data-field="access"]').forEach(el => {
-      el.addEventListener('change', e => {
-        _perms.filesystem[+e.target.dataset.idx].access = e.target.value;
-      });
-    });
-    $fsRules.querySelectorAll('.btn-remove-rule').forEach(el => {
-      el.addEventListener('click', e => {
-        _perms.filesystem.splice(+e.target.dataset.idx, 1);
-        renderFSRules();
-      });
-    });
-  }
-
-  function renderShellRules() {
-    $shellRules.innerHTML = '';
-    (_perms.shell || []).forEach((rule, i) => {
-      const row = document.createElement('div');
-      row.className = 'rule-row';
-      row.innerHTML = `
-        <input type="text" value="${rule.pattern}" placeholder="git *, npm run *" data-idx="${i}" data-field="pattern" />
-        <select class="rule-allow-select" data-idx="${i}" data-field="allow">
-          <option value="true"  ${rule.allow ? 'selected' : ''}>allow</option>
-          <option value="false" ${!rule.allow ? 'selected' : ''}>deny</option>
-        </select>
-        <button class="btn-remove-rule" data-idx="${i}" data-type="shell">×</button>`;
-      $shellRules.appendChild(row);
-    });
-    $shellRules.querySelectorAll('input[data-field="pattern"]').forEach(el => {
-      el.addEventListener('input', e => {
-        _perms.shell[+e.target.dataset.idx].pattern = e.target.value;
-      });
-    });
-    $shellRules.querySelectorAll('select[data-field="allow"]').forEach(el => {
-      el.addEventListener('change', e => {
-        _perms.shell[+e.target.dataset.idx].allow = e.target.value === 'true';
-      });
-    });
-    $shellRules.querySelectorAll('.btn-remove-rule').forEach(el => {
-      el.addEventListener('click', e => {
-        _perms.shell.splice(+e.target.dataset.idx, 1);
-        renderShellRules();
-      });
-    });
-  }
-
-  function loadPermsIntoUI(p) {
-    _perms = JSON.parse(JSON.stringify(p));  // deep clone
-    $permApproval.value    = _perms.approval_mode || 'ask_all';
-    $netEnabled.checked    = _perms.network?.enabled ?? false;
-    $netAllowed.value      = (_perms.network?.allowed_domains || []).join(', ');
-    $netDenied.value       = (_perms.network?.denied_domains  || []).join(', ');
-    syncNetworkTools();
-    renderFSRules();
-    renderShellRules();
-  }
-
-  function collectPerms() {
-    _perms.approval_mode = $permApproval.value;
-    _perms.network = {
-      enabled:         $netEnabled.checked,
-      allowed_domains: $netAllowed.value.split(',').map(s => s.trim()).filter(Boolean),
-      denied_domains:  $netDenied.value.split(',').map(s => s.trim()).filter(Boolean),
-    };
-    return _perms;
-  }
-
-  // ── Agent buttons ─────────────────────────────────
-  document.querySelectorAll('.agent-btn').forEach(btn => {
-    btn.disabled = true;
-    btn.title = 'Agent launch flow is disabled in this UI. Use New Session instead.';
-  });
-
-  $addFsRule.addEventListener('click', () => {
-    _perms.filesystem.push({ path: '**', access: 'write' });
-    renderFSRules();
-  });
-  $addShellRule.addEventListener('click', () => {
-    _perms.shell.push({ pattern: '', allow: true });
-    renderShellRules();
-  });
-  $permApproval.addEventListener('change', () => { _perms.approval_mode = $permApproval.value; });
-
-  $agentModalCancel.addEventListener('click', () => $agentModalBackdrop.classList.remove('open'));
-  $agentModalBackdrop.addEventListener('click', e => {
-    if (e.target === $agentModalBackdrop) $agentModalBackdrop.classList.remove('open');
-  });
-
-  async function startAgent() {}
-
-  $agentModalStart.addEventListener('click', startAgent);
-  $agentPromptInput.addEventListener('keydown', e => {
-    if (e.key === 'Escape') $agentModalBackdrop.classList.remove('open');
   });
 
   connect();
