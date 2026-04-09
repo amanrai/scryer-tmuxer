@@ -280,6 +280,12 @@
     .agent-btn[data-agent="claude"]:hover { color: #e8975a; border-color: #e8975a; }
     .agent-btn[data-agent="codex"]:hover  { color: var(--accent); border-color: var(--accent); }
     .agent-btn[data-agent="gemini"]:hover { color: #4db8a0; border-color: #4db8a0; }
+    .helper-copy {
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
 
     #agent-modal-backdrop {
       display: none;
@@ -625,21 +631,29 @@
 <div id="modal-backdrop" class="modal-backdrop">
   <div class="modal">
     <div class="modal-body">
-      <h2>New Session</h2>
+      <h2>Start Command Session</h2>
       <div>
         <label for="session-name-input">Session name (optional)</label>
         <input id="session-name-input" type="text" placeholder="my-session" autocomplete="off" />
       </div>
+      <div>
+        <label for="session-command-input">Command</label>
+        <input id="session-command-input" type="text" placeholder="claude" autocomplete="off" />
+      </div>
+      <p class="helper-copy">Path is fixed to <code>agent-sessions/tmuxer-ui-test-path</code> inside common-volume.</p>
     </div>
     <div class="modal-footer">
       <button class="btn-cancel" id="modal-cancel">Cancel</button>
-      <button class="btn-create" id="modal-create">Create</button>
+      <button class="btn-create" id="modal-create">Start</button>
     </div>
   </div>
 </div>
 
 <script>
-  const SERVER  = '';
+  const FIXED_PATH = 'agent-sessions/tmuxer-ui-test-path';
+  const SERVER = window.location.port === '5679'
+    ? `${window.location.protocol}//${window.location.hostname}:5678`
+    : '';
   const API_KEY = '8tq2KxJnLuPsWvv-8rDmMV7smvgylosYaIhFUiNloa4';
   const AUTH_HEADERS = { 'Content-Type': 'application/json', 'X-API-Key': API_KEY };
 
@@ -661,6 +675,7 @@
   const $modalCancel        = document.getElementById('modal-cancel');
   const $modalCreate        = document.getElementById('modal-create');
   const $nameInput          = document.getElementById('session-name-input');
+  const $commandInput       = document.getElementById('session-command-input');
   const $agentModalBackdrop = document.getElementById('agent-modal-backdrop');
   const $agentModalTitle    = document.getElementById('agent-modal-title');
   const $agentModalCancel   = document.getElementById('agent-modal-cancel');
@@ -786,10 +801,39 @@
     socket.emit('attach', { session: name, cols: term.cols, rows: term.rows });
   }
 
-  function doNewSession(name) {
-    showTerminal(name || 'new session');  // 1. visible first
-    openTerm();                           // 2. open into visible container
-    socket.emit('new_session', { name: name || undefined, cols: term.cols, rows: term.rows });
+  async function startCommandSession(name, command) {
+    showTerminal(name || 'new session');
+    openTerm();
+    term.write(`\r\n\x1b[36m[starting command in ${FIXED_PATH}]\x1b[0m\r\n`);
+
+    try {
+      const res = await fetch(`${SERVER}/start/with-command-in-path`, {
+        method: 'POST',
+        headers: AUTH_HEADERS,
+        body: JSON.stringify({
+          path: FIXED_PATH,
+          command,
+          session_name: name || '',
+          cols: term.cols,
+          rows: term.rows,
+        }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `Request failed with ${res.status}`);
+      }
+
+      const data = await res.json();
+      socket.emit('list_sessions');
+      doAttach(data.session_name || data.session);
+    } catch (error) {
+      if (term) {
+        term.write(`\r\n\x1b[31m[failed to start session: ${error.message}]\x1b[0m\r\n`);
+      }
+      hideTerminal();
+      alert(`Failed to start session: ${error.message}`);
+    }
   }
 
   // ── Socket ────────────────────────────────────────
@@ -869,12 +913,22 @@
 
   function createSession() {
     const name = $nameInput.value.trim();
+    const command = $commandInput.value.trim();
+    if (!command) {
+      alert('Command is required.');
+      $commandInput.focus();
+      return;
+    }
     $modalBackdrop.classList.remove('open');
-    doNewSession(name);
+    startCommandSession(name, command);
   }
 
   $modalCreate.addEventListener('click', createSession);
   $nameInput.addEventListener('keydown', e => {
+    if (e.key === 'Enter') createSession();
+    if (e.key === 'Escape') $modalBackdrop.classList.remove('open');
+  });
+  $commandInput.addEventListener('keydown', e => {
     if (e.key === 'Enter') createSession();
     if (e.key === 'Escape') $modalBackdrop.classList.remove('open');
   });
@@ -976,16 +1030,8 @@
 
   // ── Agent buttons ─────────────────────────────────
   document.querySelectorAll('.agent-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      _pendingAgent = btn.dataset.agent;
-      const defaults = _agentDefaults[_pendingAgent] || {};
-      $agentModalTitle.textContent = _pendingAgent.charAt(0).toUpperCase() + _pendingAgent.slice(1);
-      $agentPromptInput.value = defaults.default_prompt || '';
-      $agentModelInput.value  = defaults.default_model  || '';
-      loadPermsIntoUI(defaults.default_permissions || { approval_mode: 'ask_all', filesystem: [], shell: [], network: { enabled: true, allowed_domains: [], denied_domains: [] } });
-      $agentModalBackdrop.classList.add('open');
-      setTimeout(() => $agentPromptInput.focus(), 50);
-    });
+    btn.disabled = true;
+    btn.title = 'Agent launch flow is disabled in this UI. Use New Session instead.';
   });
 
   $addFsRule.addEventListener('click', () => {
@@ -1003,43 +1049,13 @@
     if (e.target === $agentModalBackdrop) $agentModalBackdrop.classList.remove('open');
   });
 
-  async function startAgent() {
-    $agentModalBackdrop.classList.remove('open');
-    $agentModalStart.disabled = true;
-
-    try {
-      const res = await fetch(`${SERVER}/start/${_pendingAgent}`, {
-        method: 'POST',
-        headers: AUTH_HEADERS,
-        body: JSON.stringify({
-          permissions:     collectPerms(),
-          starting_prompt: $agentPromptInput.value.trim(),
-          model:           $agentModelInput.value.trim(),
-        }),
-      });
-      if (!res.ok) {
-        const err = await res.json();
-        alert(`Failed to start ${_pendingAgent}: ${err.detail}`);
-        return;
-      }
-      const { session } = await res.json();
-      setTimeout(() => {
-        socket.emit('list_sessions');
-        doAttach(session);
-      }, 500);
-    } catch (e) {
-      alert(`Error: ${e.message}`);
-    } finally {
-      $agentModalStart.disabled = false;
-    }
-  }
+  async function startAgent() {}
 
   $agentModalStart.addEventListener('click', startAgent);
   $agentPromptInput.addEventListener('keydown', e => {
     if (e.key === 'Escape') $agentModalBackdrop.classList.remove('open');
   });
 
-  fetchAgentDefaults();
   connect();
 </script>
 </body>
