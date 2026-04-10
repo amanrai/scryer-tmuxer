@@ -1,8 +1,7 @@
 # tmuxer — Agent Integration Guide
 
-tmuxer is a server that manages tmux sessions running AI agents (Claude, Codex, Gemini).
-It exposes a REST API that any orchestrating agent can call to spawn, observe, and control
-other agent sessions — no MCP, no special protocol. Everything is plain HTTP.
+tmuxer is a server that manages tmux sessions and live terminal attach.
+It exposes a REST API plus Socket.IO for realtime IO.
 
 ---
 
@@ -11,21 +10,22 @@ other agent sessions — no MCP, no special protocol. Everything is plain HTTP.
 ```
 Orchestrator Agent
       │
-      │  REST (HTTP/JSON)
+      │  REST + Socket.IO
       ▼
  tmuxer server  :5678
       │
-      ├── POST /start/{agent}  →  creates tmux session  →  agent process runs inside
+      ├── POST /start/with-command-in-path  →  creates tmux session  →  command runs inside
       ├── GET  /sessions        →  list all live sessions
       ├── GET  /sessions/{name} →  inspect a session
       ├── POST /sessions/{name}/input   →  send text/keys into the session
       ├── GET  /sessions/{name}/output  →  poll current screen contents
-      └── DELETE /sessions/{name}       →  kill the session
+      ├── DELETE /sessions/{name}       →  kill the session
+      └── /socket.io/                   →  live attach, input, resize, detach
 ```
 
-A session is a tmux session with an agent process running inside it.
-The orchestrator starts sessions, polls their output to track progress,
-sends input when needed, and kills them when done.
+A session is a tmux session with a command running inside it.
+The caller starts sessions, polls their output to track progress,
+sends input when needed, or attaches live over Socket.IO.
 
 ---
 
@@ -58,54 +58,60 @@ Useful for understanding what defaults will be applied before overriding them.
 ### Start a Session
 
 ```
-POST /start/{agent}
-POST /start/claude
-POST /start/codex
-POST /start/gemini
+POST /start/with-command-in-path
 ```
 
-Starts a new tmux session running the specified agent in the given directory.
-Writes the permissions config to the appropriate native file before launching.
-If a `starting_prompt` is provided, it is written to `prompt.txt` in the workdir
-and passed to the agent via shell expansion (`$(cat prompt.txt)`).
+Starts a new tmux session, changes into the resolved common-volume path, and runs the given command.
+
+The `path` must be a supported common-volume-relative path. Right now that means:
+
+- `agent-sessions`
+- `agent-sessions/<subpath>`
 
 **Request body:**
 ```json
 {
-  "path": "~/Code/my-project",
-  "starting_prompt": "Read AGENTS.md and implement the first ticket.",
-  "permissions": {
-    "approval_mode": "auto_edit",
-    "filesystem": [
-      { "path": "**", "access": "write" }
-    ],
-    "shell": [
-      { "pattern": "git *",     "allow": true },
-      { "pattern": "npm *",     "allow": true },
-      { "pattern": "python3 *", "allow": true },
-      { "pattern": "rm *",      "allow": false }
-    ],
-    "network": {
-      "enabled": true,
-      "allowed_domains": [],
-      "denied_domains": []
-    }
-  }
+  "path": "agent-sessions",
+  "command": "claude",
+  "session_name": "example-session",
+  "cols": 220,
+  "rows": 50
 }
 ```
 
-All fields except `path` are optional. Omitting `permissions` applies the safe defaults.
+`command` must not be empty.
 
 **Response:**
 ```json
 {
-  "session": "claude-1741234567",
-  "agent": "claude",
-  "path": "/Users/you/Code/my-project"
+  "session": "example-session",
+  "session_name": "example-session",
+  "session_dir": "/agent-sessions",
+  "alive": true
 }
 ```
 
 The `session` name is what you use in all subsequent calls.
+
+---
+
+### Live Attach
+
+Realtime attach is not a raw `/ws/{name}` WebSocket route.
+
+The current implementation uses Socket.IO on:
+
+```
+/socket.io/
+```
+
+Typical flow:
+
+1. create or identify a tmux session over REST
+2. connect a Socket.IO client to `http://localhost:5678`
+3. emit `attach` with `session`, `cols`, and `rows`
+4. receive `output`
+5. emit `input`, `resize`, `detach`, or `list_sessions` as needed
 
 ---
 

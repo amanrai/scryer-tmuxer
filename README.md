@@ -83,7 +83,7 @@ Main REST endpoints:
 - `POST /sessions/{name}/input`
 - `DELETE /sessions/{name}`
 
-WebSocket support exists for live terminal attach and interactive session IO.
+Live terminal attach and interactive session IO are exposed through Socket.IO on `/socket.io/`.
 
 ## Socket.IO Streaming
 
@@ -105,8 +105,8 @@ Important events:
   - `detach`
   - `input`
   - `resize`
-  - `refresh_sessions`
-  - `run_preflight`
+  - `list_sessions`
+  - `preflight`
 - server emits:
   - `attached`
   - `detached`
